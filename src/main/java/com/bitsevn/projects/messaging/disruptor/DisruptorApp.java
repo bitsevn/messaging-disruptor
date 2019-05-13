@@ -1,19 +1,16 @@
 package com.bitsevn.projects.messaging.disruptor;
 
+import com.bitsevn.projects.messaging.disruptor.factory.DisruptorThreadFactory;
 import com.lmax.disruptor.BusySpinWaitStrategy;
 import com.lmax.disruptor.EventFactory;
 import com.lmax.disruptor.EventHandler;
 import com.lmax.disruptor.WorkHandler;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
-import com.lmax.disruptor.util.DaemonThreadFactory;
 import org.junit.Assert;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -57,16 +54,14 @@ public class DisruptorApp {
             System.out.println("----------------------------------------------");
         }
 
-        ThreadFactory threadFactory = DaemonThreadFactory.INSTANCE;
-
-        int TOTAL_EVENT_HANDLERS = (AVAILABLE_CORES * 2) + STREAM_GROUPS.size() +  2; // work pool handlers for AB/CD, producers, dispatcher & joiner
-        ExecutorService executorService = Executors.newFixedThreadPool(TOTAL_EVENT_HANDLERS);
+        /*int TOTAL_EVENT_HANDLERS = (AVAILABLE_CORES * 2) + STREAM_GROUPS.size() +  2; // work pool handlers for AB/CD, producers, dispatcher & joiner
+        ExecutorService executorService = Executors.newFixedThreadPool(TOTAL_EVENT_HANDLERS);*/
 
         // First stage stream pipeline
         Disruptor<Event> disruptorStage1 = new Disruptor<>(
                 Event.EVENT_FACTORY,
                 RING_BUFFER_SIZE,
-                executorService,
+                new DisruptorThreadFactory("thread-factory-stage-1"),
                 ProducerType.MULTI,
                 new BusySpinWaitStrategy()
         );
@@ -75,7 +70,7 @@ public class DisruptorApp {
         Disruptor<Event> disruptorStageAB = new Disruptor<>(
                 Event.EVENT_FACTORY,
                 RING_BUFFER_SIZE,
-                executorService,
+                new DisruptorThreadFactory("thread-factory-stage-AB"),
                 ProducerType.MULTI,
                 new BusySpinWaitStrategy()
         );
@@ -84,7 +79,7 @@ public class DisruptorApp {
         Disruptor<Event> disruptorStageCD = new Disruptor<>(
                 Event.EVENT_FACTORY,
                 RING_BUFFER_SIZE,
-                executorService,
+                new DisruptorThreadFactory("thread-factory-stage-CD"),
                 ProducerType.MULTI,
                 new BusySpinWaitStrategy()
         );
@@ -98,7 +93,7 @@ public class DisruptorApp {
                     System.out.println("--------- Assertions ------------");
                     Assert.assertEquals(dispatchedStreams.get(), joinedStreams.get());
                     System.out.println("--------- Assertions ------------");
-                    executorService.shutdownNow();
+                    // executorService.shutdownNow();
                 }
             }
         };
