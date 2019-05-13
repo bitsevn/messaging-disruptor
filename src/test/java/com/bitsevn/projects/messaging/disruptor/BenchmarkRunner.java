@@ -1,6 +1,5 @@
-package com.bitsevn.projects.messaging.disruptor.benchmark;
+package com.bitsevn.projects.messaging.disruptor;
 
-import com.bitsevn.projects.messaging.disruptor.DisruptorApp;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.RunnerException;
 
@@ -18,21 +17,21 @@ public class BenchmarkRunner {
     public static class ExecutionPlan {
 
         @Param({ "1024", "4096", "32768" })
-        public String RING_BUFFER_SIZE;
+        public String RING_SIZE;
 
-        @Param({ "100", "200", "300", "500", "1000" })
+        @Param({ "100", "1000", "10000", "100000" })
         public String STREAMS;
 
-        @Param({ "4", "8", "16", "32" })
+        @Param({ "8", "16", "32" })
         public int WORKER_THREADS;
 
         public List<String> STREAM_GROUPS = Arrays.asList("A:AB", "B:AB", "C:CD", "D:CD");
 
-        public DisruptorApp app;
+        public DisruptorServer disruptorServer;
 
         @Setup
         public void setUp() {
-            app = new DisruptorApp();
+            disruptorServer = new DisruptorServer();
         }
     }
 
@@ -42,8 +41,8 @@ public class BenchmarkRunner {
     @Warmup(iterations = 3)
     @BenchmarkMode(Mode.Throughput)
     public void benchmarkThroughput(ExecutionPlan plan) {
-        plan.app.run(
-            Integer.parseInt(plan.RING_BUFFER_SIZE),
+        plan.disruptorServer.start(
+            Integer.parseInt(plan.RING_SIZE),
             Integer.parseInt(plan.STREAMS),
             plan.WORKER_THREADS,
             plan.STREAM_GROUPS
