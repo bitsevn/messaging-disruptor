@@ -20,18 +20,19 @@ public class BenchmarkRunner {
         public String RING_SIZE;
 
         @Param({ "100", "1000", "10000", "100000" })
-        public String STREAMS;
+        public String EVENTS_PER_PRODUCER;
 
         @Param({ "8", "16", "32" })
-        public int WORKER_THREADS;
+        public int WORKERS;
 
-        public List<String> STREAM_GROUPS = Arrays.asList("A:AB", "B:AB", "C:CD", "D:CD");
+        public List<String> PRODUCERS = Arrays.asList("A:AB", "B:AB", "C:CD", "D:CD");
 
         public DisruptorServer disruptorServer;
 
         @Setup
         public void setUp() {
             disruptorServer = new DisruptorServer();
+            disruptorServer.setDebugEnabled(false);
         }
     }
 
@@ -43,9 +44,9 @@ public class BenchmarkRunner {
     public void benchmarkThroughput(ExecutionPlan plan) {
         plan.disruptorServer.start(
             Integer.parseInt(plan.RING_SIZE),
-            Integer.parseInt(plan.STREAMS),
-            plan.WORKER_THREADS,
-            plan.STREAM_GROUPS
+            Integer.parseInt(plan.EVENTS_PER_PRODUCER),
+            plan.WORKERS,
+            plan.PRODUCERS
         );
     }
 }
