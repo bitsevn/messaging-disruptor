@@ -14,14 +14,14 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class DisruptorApp {
 
-    private static final boolean DEBUG = false;
+    private static final boolean DEBUG = true;
 
     public static void main(String[] args) {
-
         // must be power of two
-        final int RING_BUFFER_SIZE = 64;
-        final int STREAMS_PER_GROUP = 100;
-        final int AVAILABLE_CORES = Runtime.getRuntime().availableProcessors();
+        final int RING_BUFFER_SIZE = 4096;
+        final int STREAMS_PER_GROUP = 1000;
+        // final int AVAILABLE_CORES = Runtime.getRuntime().availableProcessors();
+        final int AVAILABLE_CORES = 8;
         final List<String> STREAM_GROUPS = Arrays.asList("A:AB", "B:AB", "C:CD", "D:CD");
 
         DisruptorApp app = new DisruptorApp();
@@ -95,9 +95,9 @@ public class DisruptorApp {
         disruptorStage1.handleEventsWith(dispatcherHandler);
 
         // kick start disruptor instances
+        disruptorStage1.start();
         disruptorStageAB.start();
         disruptorStageCD.start();
-        disruptorStage1.start();
 
         // now kick off produces for streams
         kickOffProducers(disruptorStage1, STREAM_GROUPS, STREAMS_PER_GROUP);

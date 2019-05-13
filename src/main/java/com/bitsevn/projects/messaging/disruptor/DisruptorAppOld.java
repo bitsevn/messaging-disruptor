@@ -11,7 +11,7 @@ import com.lmax.disruptor.util.DaemonThreadFactory;
 import java.util.Arrays;
 import java.util.List;
 
-public class MessagingDisruptorApp {
+public class DisruptorAppOld {
 
     public static void main(String[] args) {
         final List<String> GROUPS = Arrays.asList("A", "B", "C", "D");
@@ -19,7 +19,7 @@ public class MessagingDisruptorApp {
         final int STREAMS = 100;
         final int MAX_WORKERS = Runtime.getRuntime().availableProcessors();
 
-        new MessagingDisruptorApp().run(GROUPS, RING_BUFFER_SIZE, STREAMS, MAX_WORKERS);
+        new DisruptorAppOld().run(GROUPS, RING_BUFFER_SIZE, STREAMS, MAX_WORKERS);
 
     }
 
