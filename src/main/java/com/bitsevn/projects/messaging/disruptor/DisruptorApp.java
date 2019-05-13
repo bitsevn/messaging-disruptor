@@ -7,19 +7,28 @@ import com.lmax.disruptor.WorkHandler;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
 import com.lmax.disruptor.util.DaemonThreadFactory;
+import org.junit.Assert;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class DisruptorApp {
 
     private static final boolean DEBUG = true;
 
+    private AtomicInteger dispatchedStreams;
+    private AtomicInteger joinedStreams;
+    private AtomicInteger counter;
+
     public static void main(String[] args) {
         // must be power of two
         final int RING_BUFFER_SIZE = 4096;
-        final int STREAMS_PER_GROUP = 1000;
+        final int STREAMS_PER_GROUP = 100;
         // final int AVAILABLE_CORES = Runtime.getRuntime().availableProcessors();
         final int AVAILABLE_CORES = 8;
         final List<String> STREAM_GROUPS = Arrays.asList("A:AB", "B:AB", "C:CD", "D:CD");
@@ -32,6 +41,10 @@ public class DisruptorApp {
     public void run(int RING_BUFFER_SIZE, int STREAMS_PER_GROUP, int AVAILABLE_CORES, List<String> STREAM_GROUPS) {
 
         int TOTAL_STREAMS = (STREAMS_PER_GROUP + 1) * STREAM_GROUPS.size();
+
+        dispatchedStreams = new AtomicInteger(0);
+        joinedStreams = new AtomicInteger(0);
+        counter = new AtomicInteger(TOTAL_STREAMS);
         if(DEBUG) {
             System.out.println("----------------------------------------------");
             System.out.println("# RING_BUFFER_SIZE        : " + RING_BUFFER_SIZE);
@@ -44,12 +57,16 @@ public class DisruptorApp {
             System.out.println("----------------------------------------------");
         }
 
+        ThreadFactory threadFactory = DaemonThreadFactory.INSTANCE;
+
+        int TOTAL_EVENT_HANDLERS = (AVAILABLE_CORES * 2) + STREAM_GROUPS.size() +  2; // work pool handlers for AB/CD, producers, dispatcher & joiner
+        ExecutorService executorService = Executors.newFixedThreadPool(TOTAL_EVENT_HANDLERS);
 
         // First stage stream pipeline
         Disruptor<Event> disruptorStage1 = new Disruptor<>(
                 Event.EVENT_FACTORY,
                 RING_BUFFER_SIZE,
-                DaemonThreadFactory.INSTANCE,
+                executorService,
                 ProducerType.MULTI,
                 new BusySpinWaitStrategy()
         );
@@ -58,7 +75,7 @@ public class DisruptorApp {
         Disruptor<Event> disruptorStageAB = new Disruptor<>(
                 Event.EVENT_FACTORY,
                 RING_BUFFER_SIZE,
-                DaemonThreadFactory.INSTANCE,
+                executorService,
                 ProducerType.MULTI,
                 new BusySpinWaitStrategy()
         );
@@ -67,7 +84,7 @@ public class DisruptorApp {
         Disruptor<Event> disruptorStageCD = new Disruptor<>(
                 Event.EVENT_FACTORY,
                 RING_BUFFER_SIZE,
-                DaemonThreadFactory.INSTANCE,
+                executorService,
                 ProducerType.MULTI,
                 new BusySpinWaitStrategy()
         );
@@ -75,7 +92,14 @@ public class DisruptorApp {
         // Result joiner event handler
         EventHandler<Event> joinerHandler = (event, seq, batchEnd) -> {
             if(DEBUG) {
-                System.out.println("[joiner-" + event.group + "] event " + event);
+                System.out.println("[" + Thread.currentThread().getName() + "] [joiner-" + event.group + "] event " + event);
+                joinedStreams.incrementAndGet();
+                if(counter.decrementAndGet() <= 0) {
+                    System.out.println("--------- Assertions ------------");
+                    Assert.assertEquals(dispatchedStreams.get(), joinedStreams.get());
+                    System.out.println("--------- Assertions ------------");
+                    executorService.shutdownNow();
+                }
             }
         };
 
@@ -108,7 +132,8 @@ public class DisruptorApp {
     private EventHandler<Event> getDispatcherEventHandler(Disruptor<Event> downstreamAB, Disruptor<Event> downstreamCD) {
         return (event, seq, batchEnd) -> {
                 if(DEBUG) {
-                    System.out.println("[dispatcher-" + event.group + "] event " + event);
+                    System.out.println("[" + Thread.currentThread().getName() + "] [dispatcher-" + event.group + "] event " + event);
+                    dispatchedStreams.incrementAndGet();
                 }
 
                 if(event.value.startsWith("A") || event.value.startsWith("B")) {
@@ -135,7 +160,7 @@ public class DisruptorApp {
                         event.value = params[0] + num;
                         event.group = params[1];
                         if(DEBUG) {
-                            System.out.println("[publisher-" + params[0] + "] event " + event);
+                            System.out.println("[" + Thread.currentThread().getName() + "] [publisher-" + params[0] + "] event " + event);
                         }
                     });
                     int count = ThreadLocalRandom.current().nextInt(100);
@@ -147,7 +172,7 @@ public class DisruptorApp {
                     event.value = params[0] + "!";
                     event.group = params[1];
                     if(DEBUG) {
-                        System.out.println("[publisher-" + params[0] + "] event " + event);
+                        System.out.println("[" + Thread.currentThread().getName() + "] [publisher-" + params[0] + "] event " + event);
                     }
                 });
             }, "producer-thread-" +  group).start();
@@ -161,7 +186,7 @@ public class DisruptorApp {
             workHandlers[i] = (event) -> {
                 event.value = event.value + ":processed";
                 if(DEBUG) {
-                    System.out.println("[consumer-" + GROUP + "-thread-" + worker + "] event " + event);
+                    System.out.println("[" + Thread.currentThread().getName() + "] [consumer-" + GROUP + "-thread-" + worker + "] event " + event);
                 }
                 int count = ThreadLocalRandom.current().nextInt(100);
                 while (count > 0) count--;// busy spin
