@@ -38,7 +38,7 @@ public class DisruptorServerTestUtil {
                 e.printStackTrace();
             }
         });
-        disruptorServer.setShutdownCallback(() -> {
+        disruptorServer.setShutdownCallback((ev) -> {
             Assert.assertEquals(totalEvents, productionQ.size());
             Assert.assertEquals(totalEvents, dispatchQ.size());
             Assert.assertEquals(totalEvents, joinerQ.size());

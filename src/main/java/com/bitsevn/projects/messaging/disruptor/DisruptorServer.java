@@ -17,10 +17,10 @@ import java.util.concurrent.TimeUnit;
 public class DisruptorServer {
 
     private boolean debugEnabled = true;
-    private ProduceCallback produceCallback;
-    private DispatchCallback dispatchCallback;
-    private JoinCallback joinCallback;
-    private ShutdownCallback shutdownCallback;
+    private MilestoneCallback produceCallback;
+    private MilestoneCallback dispatchCallback;
+    private MilestoneCallback joinCallback;
+    private MilestoneCallback shutdownCallback;
 
     public boolean isDebugEnabled() {
         return debugEnabled;
@@ -30,52 +30,40 @@ public class DisruptorServer {
         this.debugEnabled = debugEnabled;
     }
 
-    public ProduceCallback getProduceCallback() {
+    public MilestoneCallback getProduceCallback() {
         return produceCallback;
     }
 
-    public void setProduceCallback(ProduceCallback produceCallback) {
+    public void setProduceCallback(MilestoneCallback produceCallback) {
         this.produceCallback = produceCallback;
     }
 
-    public DispatchCallback getDispatchCallback() {
+    public MilestoneCallback getDispatchCallback() {
         return dispatchCallback;
     }
 
-    public void setDispatchCallback(DispatchCallback dispatchCallback) {
+    public void setDispatchCallback(MilestoneCallback dispatchCallback) {
         this.dispatchCallback = dispatchCallback;
     }
 
-    public JoinCallback getJoinCallback() {
+    public MilestoneCallback getJoinCallback() {
         return joinCallback;
     }
 
-    public void setJoinCallback(JoinCallback joinCallback) {
+    public void setJoinCallback(MilestoneCallback joinCallback) {
         this.joinCallback = joinCallback;
     }
 
-    public ShutdownCallback getShutdownCallback() {
+    public MilestoneCallback getShutdownCallback() {
         return shutdownCallback;
     }
 
-    public void setShutdownCallback(ShutdownCallback shutdownCallback) {
+    public void setShutdownCallback(MilestoneCallback shutdownCallback) {
         this.shutdownCallback = shutdownCallback;
     }
 
-    interface ProduceCallback {
-        void postProduce(Event e);
-    }
-
-    interface DispatchCallback {
-        void postDispatch(Event e);
-    }
-
-    interface JoinCallback {
-        void postJoin(Event e);
-    }
-
-    interface ShutdownCallback {
-        void preShutdown();
+    interface MilestoneCallback {
+        void onMilestone(Event e);
     }
 
     static class Event {
@@ -163,7 +151,7 @@ public class DisruptorServer {
                 new BusySpinWaitStrategy());
 
         EventHandler<Event> dispatchHandler = (e, s, b) -> {
-            if(dispatchCallback != null) dispatchCallback.postDispatch(e.clone());
+            if(dispatchCallback != null) dispatchCallback.onMilestone(e.clone());
             if(debugEnabled) System.out.println(String.format("[dispatcher] dispatch event %s", e));
             if(e.value.startsWith("A") || e.value.startsWith("B")) {
                 milestoneAB.publishEvent((ev, sq) -> {
@@ -180,7 +168,7 @@ public class DisruptorServer {
 
         EventHandler<Event> joinHandler = (e, s, b) -> {
             if(debugEnabled) System.out.println(String.format("[joiner] joining event %s", e));
-            if(joinCallback != null) joinCallback.postJoin(e.clone());
+            if(joinCallback != null) joinCallback.onMilestone(e.clone());
             e.clear();// clear at the end of the pipeline
             gate.countDown();
         };
@@ -201,7 +189,7 @@ public class DisruptorServer {
                     final Event event = new Event(String.format("%s%s", producer, eventId));
                     milestone.publishEvent((e, s) -> e.value = event.value);
                     if(debugEnabled) System.out.println(String.format("[producer-%s] produced event %s", producer, event));
-                    if(produceCallback != null) produceCallback.postProduce(event.clone());
+                    if(produceCallback != null) produceCallback.onMilestone(event.clone());
                     try {
                         TimeUnit.MICROSECONDS.sleep(ThreadLocalRandom.current().nextInt(20));
                     } catch (InterruptedException e) {
@@ -216,7 +204,7 @@ public class DisruptorServer {
         } catch (InterruptedException e) {
             e.printStackTrace();
         } finally {
-            if(shutdownCallback != null) shutdownCallback.preShutdown();
+            if(shutdownCallback != null) shutdownCallback.onMilestone(null);
             milestone.shutdown();
             milestoneAB.shutdown();
             milestoneCD.shutdown();
